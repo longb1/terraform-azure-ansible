@@ -12,16 +12,16 @@ resource "azurerm_virtual_machine" "longb_vm_web" {
   location              = azurerm_resource_group.longb_rg.location
   resource_group_name   = azurerm_resource_group.longb_rg.name
   network_interface_ids = [azurerm_network_interface.nic_web[count.index].id]
-  vm_size               = "Standard_B1ls"
+  vm_size               = "Standard_D2as_v4"
   availability_set_id   = azurerm_availability_set.avset_web.id
 
   delete_os_disk_on_termination    = true
   delete_data_disks_on_termination = true
 
   storage_image_reference {
-    publisher = "MicrosoftWindowsServer"
-    offer     = "WindowsServer"
-    sku       = "2019-datacenter"
+    publisher = "Canonical"
+    offer     = "UbuntuServer"
+    sku       = "20_04-LTS"
     version   = "latest"
   }
   storage_os_disk {
@@ -54,16 +54,16 @@ resource "azurerm_virtual_machine" "longb_vm_db" {
   location              = azurerm_resource_group.longb_rg.location
   resource_group_name   = azurerm_resource_group.longb_rg.name
   network_interface_ids = [azurerm_network_interface.nic_db[count.index].id]
-  vm_size               = "Standard_B1ls"
+  vm_size               = "Standard_D2as_v4"
   availability_set_id   = azurerm_availability_set.avset_db.id
 
   delete_os_disk_on_termination    = true
   delete_data_disks_on_termination = true
 
   storage_image_reference {
-    publisher = "MicrosoftWindowsServer"
-    offer     = "WindowsServer"
-    sku       = "2019-datacenter"
+    publisher = "Canonical"
+    offer     = "UbuntuServer"
+    sku       = "20_04-LTS"
     version   = "latest"
   }
   storage_os_disk {
