@@ -269,3 +269,23 @@ resource "azurerm_subnet_route_table_association" "assign_to_db" {
   route_table_id = azurerm_route_table.db_to_web.id
 } */
 
+#managemnt subnet (for pushing out ansible configs, etc..)
+resource "azurerm_subnet" "subnet_management" {
+  name                 = "mgnt_subnet"
+  resource_group_name  = azurerm_resource_group.longb_rg.name
+  virtual_network_name = azurerm_virtual_network.longb_vnet.name
+  address_prefixes     = ["10.89.3.0/24"]
+}
+#NIC for web VMs
+resource "azurerm_network_interface" "nic_mgnt" {
+  name                = "longb_nic_mgnt"
+  location            = azurerm_resource_group.longb_rg.location
+  resource_group_name = azurerm_resource_group.longb_rg.name
+
+  ip_configuration {
+    name                           = "NICmgntconfig"
+    subnet_id                      = azurerm_subnet.subnet_management.id
+    private_ip_address_allocation = "static"
+    private_ip_address             = "10.89.3.30"
+  }
+}
