@@ -1,35 +1,3 @@
-#vnet security group
-resource "azurerm_network_security_group" "longb_vnet_sg" {
-  name                = "acceptanceTestSecurityGroup1"
-  location            = azurerm_resource_group.longb_rg.location
-  resource_group_name = azurerm_resource_group.longb_rg.name
-
-  /* security_rule {
-    name                       = "allow-rdp"
-    description                = "allow-rdp"
-    priority                   = 100
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "3389"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*"
-  }
-
-  security_rule {
-    name                       = "allow-http"
-    description                = "allow-http"
-    priority                   = 110
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "80"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*" 
-  }*/
-}
 #main vnet
 resource "azurerm_virtual_network" "longb_vnet" {
   name                = "longb_vnet_rg"
@@ -57,33 +25,47 @@ resource "azurerm_network_interface" "nic_web" {
     private_ip_address_allocation = "Dynamic"
   }
 }
-/* #security group association to websubnet
-resource "azurerm_subnet_network_security_group_association" "web_to_sg_winrm" {
-  subnet_id                 = azurerm_subnet.subnet_web.id
-  network_security_group_id = azurerm_network_security_group.longb_vnet_sg.id
-} */
-#subnet for db VMs
-resource "azurerm_subnet" "subnet_db" {
-  name                 = "db_tier_tf"
-  resource_group_name  = azurerm_resource_group.longb_rg.name
-  virtual_network_name = azurerm_virtual_network.longb_vnet.name
-  address_prefixes     = ["10.89.2.0/24"]
-}
-#NIC for db VMs
-resource "azurerm_network_interface" "nic_db" {
-  count               = 3
-  name                = "longb_nic_db${count.index}"
+/* #web security group
+resource "azurerm_network_security_group" "web_sg" {
+  name                = "longb_web_SecurityGroup"
   location            = azurerm_resource_group.longb_rg.location
   resource_group_name = azurerm_resource_group.longb_rg.name
 
-  ip_configuration {
-    name                          = "NICdbconfig"
-    subnet_id                     = azurerm_subnet.subnet_db.id
-    private_ip_address_allocation = "Dynamic"
+  security_rule {
+    name                       = "allow-ssh"
+    description                = "allow-ssh"
+    priority                   = 105
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = "Internet"
+    destination_address_prefix = "*"
   }
+
+  security_rule {
+    name                       = "allow-http"
+    description                = "allow-http"
+    priority                   = 110
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "80"
+    source_address_prefix      = "Internet"
+    destination_address_prefix = "*"
+  }
+
 }
+#security group association to websubnet
+resource "azurerm_subnet_network_security_group_association" "web-sg-associate" {
+  subnet_id                 = azurerm_subnet.subnet_web.id
+  network_security_group_id = azurerm_network_security_group.web_sg.id
+} */
+
 #public ip for loadbalancer
-resource "azurerm_public_ip" "longb_publicip" {
+resource "azurerm_public_ip" "web_lb_publicip" {
   name                = "longb_publicip_tf"
   location            = azurerm_resource_group.longb_rg.location
   resource_group_name = azurerm_resource_group.longb_rg.name
@@ -97,7 +79,7 @@ resource "azurerm_lb" "longb_lb_public" {
 
   frontend_ip_configuration {
     name                 = "longb_publicip_config"
-    public_ip_address_id = azurerm_public_ip.longb_publicip.id
+    public_ip_address_id = azurerm_public_ip.web_lb_publicip.id
   }
 }
 resource "azurerm_lb_backend_address_pool" "ext_lb_pool" {
@@ -122,9 +104,106 @@ resource "azurerm_lb_rule" "LBRuleHTTP" {
   frontend_port                  = 80
   backend_port                   = 80
   frontend_ip_configuration_name = "longb_publicip_config"
-  probe_id = azurerm_lb_probe.ext_probe.id
-  backend_address_pool_ids = [azurerm_lb_backend_address_pool.ext_lb_pool.id]
+  probe_id                       = azurerm_lb_probe.ext_probe.id
+  backend_address_pool_ids       = [azurerm_lb_backend_address_pool.ext_lb_pool.id]
 }
+
+#associate VMs by their NICs to LB pools (external LB)
+resource "azurerm_network_interface_backend_address_pool_association" "NIC_to_LB_external" {
+  count                   = length(azurerm_network_interface.nic_web)
+  network_interface_id    = azurerm_network_interface.nic_web[count.index].id
+  ip_configuration_name   = "NICwebconfig"
+  backend_address_pool_id = azurerm_lb_backend_address_pool.ext_lb_pool.id
+}
+
+/* #route for web VM to internal load balancer
+resource "azurerm_route_table" "web_to_db" {
+  name                = "route_web_to_db"
+  location            = azurerm_resource_group.longb_rg.location
+  resource_group_name = azurerm_resource_group.longb_rg.name
+
+  route {
+    name                   = "to-database-LB"
+    address_prefix         = element(azurerm_subnet.subnet_db.address_prefixes, 0)
+    next_hop_type          = "VirtualAppliance"
+    next_hop_in_ip_address = azurerm_lb.longb_lb_private.private_ip_address
+  }
+}
+resource "azurerm_subnet_route_table_association" "assign_to_web" {
+  subnet_id      = azurerm_subnet.subnet_web.id
+  route_table_id = azurerm_route_table.web_to_db.id
+} */
+
+#subnet for db VMs
+resource "azurerm_subnet" "subnet_db" {
+  name                 = "db_tier_tf"
+  resource_group_name  = azurerm_resource_group.longb_rg.name
+  virtual_network_name = azurerm_virtual_network.longb_vnet.name
+  address_prefixes     = ["10.89.2.0/24"]
+}
+#NIC for db VMs
+resource "azurerm_network_interface" "nic_db" {
+  count               = 3
+  name                = "longb_nic_db${count.index}"
+  location            = azurerm_resource_group.longb_rg.location
+  resource_group_name = azurerm_resource_group.longb_rg.name
+
+  ip_configuration {
+    name                          = "NICdbconfig"
+    subnet_id                     = azurerm_subnet.subnet_db.id
+    private_ip_address_allocation = "Dynamic"
+  }
+}
+/* #database security group
+resource "azurerm_network_security_group" "db_sg" {
+  name                = "longb_db_SecurityGroup"
+  location            = azurerm_resource_group.longb_rg.location
+  resource_group_name = azurerm_resource_group.longb_rg.name
+
+  security_rule {
+    name                       = "allow-ssh-in"
+    description                = "Allow ssh connections"
+    priority                   = 105
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = "Internet"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "allow-sql-in" #sql from web subnet
+    description                = "allow SQL from web"
+    priority                   = 110
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "1443"
+    source_address_prefix      = "10.89.1.0/24"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "deny-internet-out" 
+    description                = "Deny outbound traffic to the internet"
+    priority                   = 500
+    direction                  = "Outbound"
+    access                     = "Deny"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "Internet"
+  }
+}
+#security group association to database subnet
+resource "azurerm_subnet_network_security_group_association" "db-sg-associate" {
+  subnet_id                 = azurerm_subnet.subnet_db.id
+  network_security_group_id = azurerm_network_security_group.db_sg.id
+} */
 
 #loadbalancer INTERNAL
 resource "azurerm_lb" "longb_lb_private" {
@@ -160,17 +239,10 @@ resource "azurerm_lb_rule" "LBRuleSQL" {
   frontend_port                  = 1443
   backend_port                   = 1443 #sql port
   frontend_ip_configuration_name = "longb_lb_privateIP"
-  probe_id = azurerm_lb_probe.int_probe.id
-  backend_address_pool_ids = [azurerm_lb_backend_address_pool.int_lb_pool.id]
+  probe_id                       = azurerm_lb_probe.int_probe.id
+  backend_address_pool_ids       = [azurerm_lb_backend_address_pool.int_lb_pool.id]
 }
 
-#associate VMs by their NICs to LB pools (external LB)
-resource "azurerm_network_interface_backend_address_pool_association" "NIC_to_LB_external" {
-  count                   = length(azurerm_network_interface.nic_web)
-  network_interface_id    = azurerm_network_interface.nic_web[count.index].id
-  ip_configuration_name   = "NICwebconfig"
-  backend_address_pool_id = azurerm_lb_backend_address_pool.ext_lb_pool.id
-}
 #associate NICs to LB pools (internal LB)
 resource "azurerm_network_interface_backend_address_pool_association" "NIC_to_LB_internal" {
   count                   = length(azurerm_network_interface.nic_db)
@@ -179,39 +251,21 @@ resource "azurerm_network_interface_backend_address_pool_association" "NIC_to_LB
   backend_address_pool_id = azurerm_lb_backend_address_pool.int_lb_pool.id
 }
 
-#route for web VM to internal load balancer
-resource "azurerm_route_table" "web_to_db" {
-  name                = "route_web_to_db"
-  location            = azurerm_resource_group.longb_rg.location
-  resource_group_name = azurerm_resource_group.longb_rg.name
-
-  route {
-    name                   = "route1"
-    address_prefix         = element(azurerm_subnet.subnet_db.address_prefixes,0)
-    next_hop_type          = "VirtualAppliance"
-    next_hop_in_ip_address = azurerm_lb.longb_lb_private.private_ip_address
-  }
-}
-resource "azurerm_subnet_route_table_association" "assign_to_web" {
-  subnet_id      = azurerm_subnet.subnet_web.id
-  route_table_id = azurerm_route_table.web_to_db.id
-}
-
-#route for database VMs to internal load balancer
+/* #route for database VMs to internal load balancer
 resource "azurerm_route_table" "db_to_web" {
   name                = "route_db_to_web"
   location            = azurerm_resource_group.longb_rg.location
   resource_group_name = azurerm_resource_group.longb_rg.name
 
   route {
-    name                   = "route2"
+    name                   = "to-web-LB"
     address_prefix         = "0.0.0.0/0" #direct all traffic out the same way it came in
     next_hop_type          = "VirtualAppliance"
-    next_hop_in_ip_address = azurerm_lb.longb_lb_private.private_ip_address
+    next_hop_in_ip_address = azurerm_public_ip.web_lb_publicip.ip_address #sends to public load balancer
   }
 }
 resource "azurerm_subnet_route_table_association" "assign_to_db" {
   subnet_id      = azurerm_subnet.subnet_db.id
   route_table_id = azurerm_route_table.db_to_web.id
-}
+} */
 
