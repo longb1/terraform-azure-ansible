@@ -1,0 +1,7 @@
+---
+- name: installsql
+  hosts:  ubuntuserver 
+  tasks:
+    - name: get my sql on there]
+      apt:
+        name: mysql

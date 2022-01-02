@@ -113,4 +113,28 @@ resource "azurerm_virtual_machine" "mgnt_vm" {
   os_profile_linux_config {
     disable_password_authentication = false
   }
+
+  connection {
+    type     = "ssh"
+    host     = format("%s", azurerm_public_ip.mgnt_publicip.ip_address)
+    user     = "foo"
+    password = "Barbaz000"
+  }
+
+  provisioner "file" {
+    source      = "./ansible/hosts"
+    destination = "/tmp/hosts"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "sudo apt update",
+      "sudo apt upgrade -y",
+      "sudo apt install ansible -y",
+      "sudo chmod 777 /etc/ansible/hosts",
+      "sudo cat /tmp/hosts >> /etc/ansible/hosts"
+    ]
+  }
+
+
 }

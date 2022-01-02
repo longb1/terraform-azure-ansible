@@ -22,7 +22,8 @@ resource "azurerm_network_interface" "nic_web" {
   ip_configuration {
     name                          = "NICwebconfig"
     subnet_id                     = azurerm_subnet.subnet_web.id
-    private_ip_address_allocation = "Dynamic"
+    private_ip_address_allocation = "static"
+    private_ip_address            = "10.89.1.1${count.index}"
   }
 }
 /* #web security group
@@ -32,16 +33,16 @@ resource "azurerm_network_security_group" "web_sg" {
   resource_group_name = azurerm_resource_group.longb_rg.name
 
   security_rule {
-    name                       = "allow-ssh"
-    description                = "allow-ssh"
+    name                       = "allow-ping"
+    description                = "allow-ping"
     priority                   = 105
     direction                  = "Inbound"
     access                     = "Allow"
-    protocol                   = "Tcp"
+    protocol                   = "Icmp"
     source_port_range          = "*"
-    destination_port_range     = "22"
-    source_address_prefix      = "Internet"
-    destination_address_prefix = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "VirtualNetwork"
+    destination_address_prefix = "VirtualNetwork"
   }
 
   security_rule {
@@ -56,8 +57,8 @@ resource "azurerm_network_security_group" "web_sg" {
     source_address_prefix      = "Internet"
     destination_address_prefix = "*"
   }
-
 }
+
 #security group association to websubnet
 resource "azurerm_subnet_network_security_group_association" "web-sg-associate" {
   subnet_id                 = azurerm_subnet.subnet_web.id
@@ -116,24 +117,6 @@ resource "azurerm_network_interface_backend_address_pool_association" "NIC_to_LB
   backend_address_pool_id = azurerm_lb_backend_address_pool.ext_lb_pool.id
 }
 
-/* #route for web VM to internal load balancer
-resource "azurerm_route_table" "web_to_db" {
-  name                = "route_web_to_db"
-  location            = azurerm_resource_group.longb_rg.location
-  resource_group_name = azurerm_resource_group.longb_rg.name
-
-  route {
-    name                   = "to-database-LB"
-    address_prefix         = element(azurerm_subnet.subnet_db.address_prefixes, 0)
-    next_hop_type          = "VirtualAppliance"
-    next_hop_in_ip_address = azurerm_lb.longb_lb_private.private_ip_address
-  }
-}
-resource "azurerm_subnet_route_table_association" "assign_to_web" {
-  subnet_id      = azurerm_subnet.subnet_web.id
-  route_table_id = azurerm_route_table.web_to_db.id
-} */
-
 #subnet for db VMs
 resource "azurerm_subnet" "subnet_db" {
   name                 = "db_tier_tf"
@@ -151,7 +134,8 @@ resource "azurerm_network_interface" "nic_db" {
   ip_configuration {
     name                          = "NICdbconfig"
     subnet_id                     = azurerm_subnet.subnet_db.id
-    private_ip_address_allocation = "Dynamic"
+    private_ip_address_allocation = "static"
+    private_ip_address            = "10.89.2.2${count.index}"
   }
 }
 /* #database security group
@@ -251,30 +235,18 @@ resource "azurerm_network_interface_backend_address_pool_association" "NIC_to_LB
   backend_address_pool_id = azurerm_lb_backend_address_pool.int_lb_pool.id
 }
 
-/* #route for database VMs to internal load balancer
-resource "azurerm_route_table" "db_to_web" {
-  name                = "route_db_to_web"
-  location            = azurerm_resource_group.longb_rg.location
-  resource_group_name = azurerm_resource_group.longb_rg.name
-
-  route {
-    name                   = "to-web-LB"
-    address_prefix         = "0.0.0.0/0" #direct all traffic out the same way it came in
-    next_hop_type          = "VirtualAppliance"
-    next_hop_in_ip_address = azurerm_public_ip.web_lb_publicip.ip_address #sends to public load balancer
-  }
-}
-resource "azurerm_subnet_route_table_association" "assign_to_db" {
-  subnet_id      = azurerm_subnet.subnet_db.id
-  route_table_id = azurerm_route_table.db_to_web.id
-} */
-
 #managemnt subnet (for pushing out ansible configs, etc..)
 resource "azurerm_subnet" "subnet_management" {
   name                 = "mgnt_subnet"
   resource_group_name  = azurerm_resource_group.longb_rg.name
   virtual_network_name = azurerm_virtual_network.longb_vnet.name
   address_prefixes     = ["10.89.3.0/24"]
+}
+resource "azurerm_public_ip" "mgnt_publicip" {
+  name                = "longb_mgnt_publicip"
+  location            = azurerm_resource_group.longb_rg.location
+  resource_group_name = azurerm_resource_group.longb_rg.name
+  allocation_method   = "Static"
 }
 #NIC for web VMs
 resource "azurerm_network_interface" "nic_mgnt" {
@@ -283,9 +255,34 @@ resource "azurerm_network_interface" "nic_mgnt" {
   resource_group_name = azurerm_resource_group.longb_rg.name
 
   ip_configuration {
-    name                           = "NICmgntconfig"
-    subnet_id                      = azurerm_subnet.subnet_management.id
+    name                          = "NICmgntconfig"
+    subnet_id                     = azurerm_subnet.subnet_management.id
     private_ip_address_allocation = "static"
-    private_ip_address             = "10.89.3.30"
+    private_ip_address            = "10.89.3.30"
+    public_ip_address_id          = azurerm_public_ip.mgnt_publicip.id
   }
 }
+
+/* #mgnmt security group
+resource "azurerm_network_security_group" "mgnt_sg" {
+  name                = "longb_mgnt_SG"
+  location            = azurerm_resource_group.longb_rg.location
+  resource_group_name = azurerm_resource_group.longb_rg.name
+
+  security_rule {
+    name                       = "allow-ping"
+    priority                   = 150
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Icmp"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "VirtualNetwork"
+    destination_address_prefix = "VirtualNetwork"
+  }
+}
+#security group association to websubnet
+resource "azurerm_subnet_network_security_group_association" "mgnt-sg-link" {
+  subnet_id                 = azurerm_subnet.subnet_management.id
+  network_security_group_id = azurerm_network_security_group.mgnt_sg.id
+} */
