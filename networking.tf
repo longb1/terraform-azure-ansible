@@ -15,7 +15,7 @@ resource "azurerm_subnet" "subnet_web" {
 #NIC for web VMs
 resource "azurerm_network_interface" "nic_web" {
   count               = 3
-  name                = "longb_nic_tf${count.index}"
+  name                = "longb_nic_web${count.index}"
   location            = azurerm_resource_group.longb_rg.location
   resource_group_name = azurerm_resource_group.longb_rg.name
 
@@ -67,7 +67,7 @@ resource "azurerm_subnet_network_security_group_association" "web-sg-associate" 
 
 #public ip for loadbalancer
 resource "azurerm_public_ip" "web_lb_publicip" {
-  name                = "longb_publicip_tf"
+  name                = "publicip_web"
   location            = azurerm_resource_group.longb_rg.location
   resource_group_name = azurerm_resource_group.longb_rg.name
   allocation_method   = "Static"
@@ -243,7 +243,7 @@ resource "azurerm_subnet" "subnet_management" {
   address_prefixes     = ["10.89.3.0/24"]
 }
 resource "azurerm_public_ip" "mgnt_publicip" {
-  name                = "longb_mgnt_publicip"
+  name                = "publicip_mgnt"
   location            = azurerm_resource_group.longb_rg.location
   resource_group_name = azurerm_resource_group.longb_rg.name
   allocation_method   = "Static"

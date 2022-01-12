@@ -3,7 +3,3 @@
 
 [serverdb]
 10.89.2.[20:22]
-
-[all:vars]
-ansible_user=foo
-ansible_password=Barbaz000
