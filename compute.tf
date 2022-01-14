@@ -138,6 +138,21 @@ resource "azurerm_virtual_machine" "mgnt_vm" {
     destination = "/tmp/hosts"
   }
 
+  provisioner "file" { #copies ansible cfg to mgnt VM
+    source      = "./ansible/ansible.cfg"
+    destination = "/home/${var.adminusername}/ansible.cfg"
+  }
+
+  provisioner "file" { #copies web vm playbook to mgnt VM
+    source      = "./ansible/playbook-main.yaml"
+    destination = "/home/${var.adminusername}/playbook-main.yaml"
+  }
+
+  provisioner "file" {
+    source      = "./website/index.html"
+    destination = "/tmp/index.html"
+  }
+
   provisioner "remote-exec" {
     inline = [
       "sudo apt update",

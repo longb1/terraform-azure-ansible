@@ -1,0 +1,37 @@
+---
+- hosts: all
+  become: true
+  pre_tasks: 
+    - name: install updates
+      apt:
+        upgrade: dist
+        update_cache: yes
+
+- hosts: serverweb
+  become: true
+  tags: apache
+  tasks:
+
+  - name: install apache web server
+    apt:
+      name: apache2
+      state: latest
+
+  - name: copy html file for site
+    tags: http
+    copy:
+      src: /tmp/index.html
+      dest: /var/www/html/index2.html
+      owner: root
+      group: root
+      mode: 0644
+
+- hosts: serverdb
+  become: true
+  tags: mysql
+  tasks:
+
+  - name: install mysql server
+    apt:
+      name: mysql-server
+      state: latest
