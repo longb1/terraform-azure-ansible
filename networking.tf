@@ -26,28 +26,28 @@ resource "azurerm_network_interface" "nic_web" {
     private_ip_address            = "10.89.1.1${count.index}"
   }
 }
-/* #web security group
+#web security group
 resource "azurerm_network_security_group" "web_sg" {
   name                = "longb_web_SecurityGroup"
   location            = azurerm_resource_group.longb_rg.location
   resource_group_name = azurerm_resource_group.longb_rg.name
 
   security_rule {
-    name                       = "allow-ping"
-    description                = "allow-ping"
+    name                       = "allow-ssh-in"
+    description                = "Allow ssh connections from mgnt subnet"
     priority                   = 105
     direction                  = "Inbound"
     access                     = "Allow"
-    protocol                   = "Icmp"
+    protocol                   = "Tcp"
     source_port_range          = "*"
-    destination_port_range     = "*"
-    source_address_prefix      = "VirtualNetwork"
+    destination_port_range     = "22"
+    source_address_prefix      = "10.89.3.0/24"
     destination_address_prefix = "VirtualNetwork"
   }
 
   security_rule {
     name                       = "allow-http"
-    description                = "allow-http"
+    description                = "allow http traffic from the internet"
     priority                   = 110
     direction                  = "Inbound"
     access                     = "Allow"
@@ -55,7 +55,7 @@ resource "azurerm_network_security_group" "web_sg" {
     source_port_range          = "*"
     destination_port_range     = "80"
     source_address_prefix      = "Internet"
-    destination_address_prefix = "*"
+    destination_address_prefix = "VirtualNetwork"
   }
 }
 
@@ -63,7 +63,7 @@ resource "azurerm_network_security_group" "web_sg" {
 resource "azurerm_subnet_network_security_group_association" "web-sg-associate" {
   subnet_id                 = azurerm_subnet.subnet_web.id
   network_security_group_id = azurerm_network_security_group.web_sg.id
-} */
+}
 
 #public ip for loadbalancer
 resource "azurerm_public_ip" "web_lb_publicip" {
@@ -138,23 +138,22 @@ resource "azurerm_network_interface" "nic_db" {
     private_ip_address            = "10.89.2.2${count.index}"
   }
 }
-/* #database security group
+#database security group
 resource "azurerm_network_security_group" "db_sg" {
   name                = "longb_db_SecurityGroup"
   location            = azurerm_resource_group.longb_rg.location
   resource_group_name = azurerm_resource_group.longb_rg.name
-
   security_rule {
     name                       = "allow-ssh-in"
-    description                = "Allow ssh connections"
+    description                = "Allow ssh connections from mgnt subnet"
     priority                   = 105
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
     source_port_range          = "*"
     destination_port_range     = "22"
-    source_address_prefix      = "Internet"
-    destination_address_prefix = "*"
+    source_address_prefix      = "10.89.3.0/24"
+    destination_address_prefix = "VirtualNetwork"
   }
 
   security_rule {
@@ -167,7 +166,7 @@ resource "azurerm_network_security_group" "db_sg" {
     source_port_range          = "*"
     destination_port_range     = "1443"
     source_address_prefix      = "10.89.1.0/24"
-    destination_address_prefix = "*"
+    destination_address_prefix = "VirtualNetwork"
   }
 
   security_rule {
@@ -187,7 +186,7 @@ resource "azurerm_network_security_group" "db_sg" {
 resource "azurerm_subnet_network_security_group_association" "db-sg-associate" {
   subnet_id                 = azurerm_subnet.subnet_db.id
   network_security_group_id = azurerm_network_security_group.db_sg.id
-} */
+}
 
 #loadbalancer INTERNAL
 resource "azurerm_lb" "longb_lb_private" {
@@ -263,21 +262,33 @@ resource "azurerm_network_interface" "nic_mgnt" {
   }
 }
 
-/* #mgnmt security group
+#mgnmt security group
 resource "azurerm_network_security_group" "mgnt_sg" {
-  name                = "longb_mgnt_SG"
+  name                = "longb_mgnt_SecurityGroup"
   location            = azurerm_resource_group.longb_rg.location
   resource_group_name = azurerm_resource_group.longb_rg.name
 
   security_rule {
     name                       = "allow-ping"
-    priority                   = 150
+    priority                   = 110
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Icmp"
     source_port_range          = "*"
     destination_port_range     = "*"
-    source_address_prefix      = "VirtualNetwork"
+    source_address_prefix      = var.ipaddress
+    destination_address_prefix = "VirtualNetwork"
+  }
+
+  security_rule {
+    name                       = "allow-ssh"
+    priority                   = 120
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "TCP"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = var.ipaddress
     destination_address_prefix = "VirtualNetwork"
   }
 }
@@ -285,4 +296,4 @@ resource "azurerm_network_security_group" "mgnt_sg" {
 resource "azurerm_subnet_network_security_group_association" "mgnt-sg-link" {
   subnet_id                 = azurerm_subnet.subnet_management.id
   network_security_group_id = azurerm_network_security_group.mgnt_sg.id
-} */
+}
