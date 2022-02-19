@@ -1,4 +1,4 @@
-**work in progress
+<img width="355" alt="Terraform-Azure-Diagram(1)" src="https://user-images.githubusercontent.com/17272827/154813262-15335026-7c96-4a93-8613-cd7bb1e9e896.png">
 
 My test environment within Azure.
 1.) authenticate to azure with azure cli (login credentials)j
@@ -19,4 +19,6 @@ realistically you would use a different private key.
 
 In my terraform environment i created the private key in the terraform runtime, in a production environment you would ideally create the key befopre hand and reference it here as a best practice, so the key can't be seen.
 
-again i was focusing on getting this gig working before hardening it.
+I have hardened this setup by:
+1 allowing SSH from my public IP only (adding a variable for it)
+2 accepting only https (port 443) traffic ffor my subnet 
