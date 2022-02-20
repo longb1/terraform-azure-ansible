@@ -8,3 +8,8 @@ variable "adminusername" {
   type    = string
   default = "foo"
 }
+
+variable "ipaddress" {
+  type        = string
+  description = "your public ip for ssh access"
+}
